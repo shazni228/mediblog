@@ -53,9 +53,20 @@ export function Dashboard() {
     setShowForm(false)
   }
 
-  const handleUpdatePost = async (data: Database['public']['Tables']['posts']['Update']) => {
+  const handleUpdatePost = async (data: Database['public']['Tables']['posts']['Insert'] | Database['public']['Tables']['posts']['Update']) => {
     if (editingPost) {
-      await updatePost(editingPost.id, data)
+      // Only include the fields that are allowed to be updated
+      const updateData = {
+        title: data.title,
+        content: data.content,
+        excerpt: data.excerpt,
+        slug: data.slug,
+        featured_image: data.featured_image,
+        status: data.status,
+        published: data.published,
+        updated_at: new Date().toISOString()
+      }
+      await updatePost(editingPost.id, updateData)
       setEditingPost(null)
     }
   }
@@ -123,8 +134,8 @@ export function Dashboard() {
               {editingPost ? 'Edit Article' : 'Create New Article'}
             </h1>
             <PostForm
-              post={editingPost}
-              onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
+              post={editingPost || undefined}
+              onSave={editingPost ? handleUpdatePost : handleCreatePost}
               onCancel={handleCancelForm}
             />
           </div>

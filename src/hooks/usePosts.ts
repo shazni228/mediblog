@@ -43,17 +43,40 @@ export function usePosts(status?: 'published' | 'all' | 'draft' | 'pending') {
 
   const createPost = async (post: Database['public']['Tables']['posts']['Insert']) => {
     try {
+      console.log('Creating post with data:', post)
+      
+      // Check if required fields are present
+      if (!post.title || !post.content) {
+        throw new Error('Title and content are required')
+      }
+
       const { data, error } = await supabase
         .from('posts')
-        .insert({ ...post, status: 'draft' })
+        .insert({ 
+          ...post, 
+          status: 'draft',
+          created_at: post.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
         .select()
         .single()
 
-      if (error) throw error
-      setPosts(prev => [data, ...prev])
-      return data
-    } catch (err) {
-      throw err instanceof Error ? err : new Error('Failed to create post')
+      console.log('Supabase response:', { data, error })
+
+      if (error) {
+        console.error('Error from Supabase:', error)
+        throw error
+      }
+      
+      // Update local state if needed
+      if (data) {
+        setPosts(prev => [data, ...prev])
+      }
+      
+      return { success: true, data }
+    } catch (error) {
+      console.error('Error in createPost:', error)
+      return { success: false, error }
     }
   }
 

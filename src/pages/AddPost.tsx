@@ -1,17 +1,23 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
 import { Database } from '../lib/database.types'
+import { usePosts } from '../hooks/usePosts'
 import { Save, X } from 'lucide-react'
 
 type PostFormData = {
   title: string
   content: string
-  category: string
-  author: string
+  slug?: string
+  excerpt?: string
+  featured_image?: string | null
+  published?: boolean
+  status?: 'draft' | 'pending' | 'published' | 'rejected'
+  category?: string
+  author?: string
 }
+
 
 const medicalCategories = [
   'Cardiology',
@@ -39,8 +45,13 @@ const medicalCategories = [
 export function AddPost() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { createPost, loading, error: postError } = usePosts()
+  const [formError, setFormError] = useState<string | null>(null)
+  
+  // Clear any previous errors when the component mounts
+  useEffect(() => {
+    setFormError(null)
+  }, [])
 
   const {
     register,
@@ -53,30 +64,87 @@ export function AddPost() {
     return <Navigate to="/login" replace />
   }
 
-  const onSubmit = async (data: PostFormData) => {
+  const onSubmit = async (formData: PostFormData) => {
     try {
-      setLoading(true)
-      setError(null)
-
-      const postData: Database['public']['Tables']['posts']['Insert'] = {
-        title: data.title,
-        content: data.content,
-        category: data.category || null,
-        author: data.author || null,
+      setFormError(null)
+      console.log('Form submission started')
+      
+      if (!user) {
+        const error = new Error('You must be logged in to create a post')
+        console.error('User not authenticated:', error)
+        throw error
       }
 
-      const { error } = await supabase
-        .from('posts')
-        .insert(postData)
+      // Basic validation
+      if (!formData.title?.trim()) {
+        const error = new Error('Title is required')
+        console.error('Validation error:', error)
+        throw error
+      }
+      
+      if (!formData.content?.trim()) {
+        const error = new Error('Content is required')
+        console.error('Validation error:', error)
+        throw error
+      }
 
-      if (error) throw error
+      // Generate a unique slug by appending a timestamp
+      const baseSlug = formData.title
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w-]+/g, '')
+        .replace(/--+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      
+      // Add timestamp to make slug unique
+      const timestamp = Date.now().toString(36).slice(-6) // Last 6 chars of timestamp in base36
+      const slug = formData.slug ? 
+        `${formData.slug}-${timestamp}` : 
+        `${baseSlug}-${timestamp}`
 
-      reset()
-      navigate('/')
+      const postData: Database['public']['Tables']['posts']['Insert'] = {
+        title: formData.title.trim(),
+        content: formData.content.trim(),
+        slug: slug,
+        excerpt: (formData.excerpt || formData.content.substring(0, 200) + '...').trim(),
+        status: 'draft',
+        published: false,
+        author_id: user.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        featured_image: formData.featured_image?.trim() || null,
+        published_by: null,
+        published_at: null
+      }
+
+      console.log('Creating post with data:', JSON.stringify(postData, null, 2))
+      
+      const { success, data, error } = await createPost(postData)
+      console.log('Post creation result:', { success, data, error })
+      
+      if (success && data) {
+        console.log('Post created successfully, resetting form and navigating...')
+        reset()
+        navigate('/')
+      } else if (error) {
+        console.warn('Error creating post:', error)
+        setFormError('Failed to create post. Please try again.')
+      } else {
+        console.warn('Unexpected response from createPost:', { success, data, error })
+        setFormError('An unexpected error occurred. Please try again.')
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create post')
-    } finally {
-      setLoading(false)
+      const errorMessage = err instanceof Error ? 
+        `Failed to create post: ${err.message}` : 
+        'An unknown error occurred while creating the post'
+      
+      console.error('Error in onSubmit:', {
+        error: err,
+        message: errorMessage,
+        stack: err instanceof Error ? err.stack : undefined
+      })
+      
+      setFormError(errorMessage)
     }
   }
 
@@ -90,9 +158,9 @@ export function AddPost() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
-            {error && (
+            {(formError || postError) && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                {error}
+                {formError || postError}
               </div>
             )}
 
@@ -179,7 +247,7 @@ export function AddPost() {
                 className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Save size={18} />
-                <span>{loading ? 'Publishing...' : 'Publish Article'}</span>
+                <span>{loading ? 'Publishing...' : 'Save as Draft'}</span>
               </button>
             </div>
           </form>

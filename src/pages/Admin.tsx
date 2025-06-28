@@ -11,7 +11,7 @@ type Post = Database['public']['Tables']['posts']['Row']
 
 export function Admin() {
   const { user } = useAuth()
-  const { posts, loading, createPost, updatePost, deletePost } = usePosts(false)
+  const { posts, loading, createPost, updatePost, deletePost } = usePosts('all')
   const [showForm, setShowForm] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
 
@@ -56,8 +56,8 @@ export function Admin() {
               {editingPost ? 'Edit Post' : 'Create New Post'}
             </h1>
             <PostForm
-              post={editingPost}
-              onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
+              post={editingPost ?? undefined}
+              onSave={editingPost ? handleUpdatePost : handleCreatePost}
               onCancel={handleCancelForm}
             />
           </div>

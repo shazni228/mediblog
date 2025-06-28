@@ -14,7 +14,7 @@ type PostFormData = {
 
 interface PostFormProps {
   post?: Database['public']['Tables']['posts']['Row']
-  onSave?: () => void
+  onSave?: (data: Database['public']['Tables']['posts']['Insert']) => Promise<void> | void
   onCancel: () => void
 }
 
@@ -82,7 +82,15 @@ export function PostForm({ post, onSave, onCancel }: PostFormProps) {
         if (error) throw error
       }
 
-      if (onSave) onSave()
+      if (onSave) await onSave({
+        ...data,
+        id: post?.id,
+        created_at: post?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: post?.status || 'draft',
+        published: post?.published || false,
+        author_id: post?.author_id || user?.id || null
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save post')
     } finally {
